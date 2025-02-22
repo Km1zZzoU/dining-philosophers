@@ -10,6 +10,9 @@ import org.nsu.syspro.parprog.examples.DefaultPhilosopher;
 import org.nsu.syspro.parprog.helpers.TestLevels;
 import org.nsu.syspro.parprog.interfaces.Fork;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 public class CustomSchedulingTest extends TestLevels {
 
     static final class CustomizedPhilosopher extends DefaultPhilosopher {
@@ -54,4 +57,100 @@ public class CustomSchedulingTest extends TestLevels {
     void testDeadlockFreedom(int N) {
         final CustomizedTable table = dine(new CustomizedTable(N), 1);
     }
+
+    static final class CustomizedFirstPhilosopher extends DefaultPhilosopher {
+        @Override
+        public void onHungry(Fork left, Fork right) {
+            left.acquire();
+            right.acquire();
+
+            sleepSeconds(1);
+
+            right.release();
+            left.release();
+
+            super.onHungry(left, right);
+        }
+    }
+
+    static final class CustomizedForkForFirstPhilosopher extends DefaultFork {
+        @Override
+        public void acquire() {
+            super.acquire();
+        }
+    }
+
+    static final class CustomizedTableForFirstPhilosopher extends DiningTable<DefaultPhilosopher, CustomizedForkForFirstPhilosopher> {
+        private int count = 0;
+        public CustomizedTableForFirstPhilosopher(int N) {
+            super(N);
+        }
+
+        @Override
+        public CustomizedForkForFirstPhilosopher createFork() {
+            return new CustomizedForkForFirstPhilosopher();
+        }
+
+        @Override
+        public DefaultPhilosopher createPhilosopher() {
+            this.count++;
+            if (this.count == 1) {
+                System.out.println("oiahfouah");
+               return new CustomizedFirstPhilosopher();
+            }
+            return new DefaultPhilosopher();
+        }
+
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {5, 6, 3, 4, 5, 6, 2, 3})
+    @Timeout(8)
+    void testSingleSlow(int N) {
+        CustomizedTableForFirstPhilosopher table = dine(new CustomizedTableForFirstPhilosopher(N), 6);
+        System.out.println(N);
+        System.out.println(table.maxMeals());
+        assertTrue(table.maxMeals() > 1000);
+    }
+
+    static final class CustomizedPhilosopherWeak extends DefaultPhilosopher {
+        @Override
+        public void onHungry(Fork left, Fork right) {
+            sleepMillis((this.id & 1) * 9 + 1);
+            super.onHungry(left, right);
+        }
+    }
+
+    static final class CustomizedForkWeak extends DefaultFork {
+        @Override
+        public void acquire() {
+            super.acquire();
+        }
+    }
+
+    static final class CustomizedTableWeak extends DiningTable<CustomizedPhilosopherWeak, CustomizedForkWeak> {
+        public CustomizedTableWeak(int N) {
+            super(N);
+        }
+
+        @Override
+        public CustomizedForkWeak createFork() {
+            return new CustomizedForkWeak();
+        }
+
+        @Override
+        public CustomizedPhilosopherWeak createPhilosopher() {
+            return new CustomizedPhilosopherWeak();
+        }
+
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {2, 3, 4, 5, 6, 2})
+    @Timeout(8)
+    void testWeakFairness(int N) {
+        CustomizedTableWeak table = dine(new CustomizedTableWeak(N), 1);
+        assertTrue(table.minMeals() > 0);
+    }
+
 }
